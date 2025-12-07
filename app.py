@@ -1,7 +1,8 @@
-from flask import Flask, render_template
+from db.redis_queries import search_movies
+from flask import Flask, render_template, request
 from pathlib import Path
 import os
-import redis
+from redis import Redis
 
 ROOT = Path(__file__).resolve().parent
 TEMPLATES_DIR = ROOT / "templates"
@@ -13,25 +14,11 @@ app = Flask(
     static_folder=str(STATIC_DIR),
 )
 
-
-def get_redis_client() -> redis.Redis:
-    """
-    Return a Redis client.
-
-    Uses environment variables if set, otherwise defaults to localhost:6379, db 0.
-    """
-    return redis.Redis(
-        host=os.getenv("REDIS_HOST", "localhost"),
-        port=int(os.getenv("REDIS_PORT", 6379)),
-        db=int(os.getenv("REDIS_DB", 0)),
-        decode_responses=True,  # return strings instead of bytes
-    )
+r = Redis(host="localhost", port=6379, db=0, decode_responses=True)
 
 
 @app.route("/")
 def home():
-    r = get_redis_client()
-
     # Grab a few movie hashes from Redis: movie:<movieId>
     keys = r.keys("movie:*")
     movies = []
@@ -65,6 +52,37 @@ def home():
     movies.sort(key=lambda m: (m["avg_rating"] is None, -(m["avg_rating"] or 0)))
 
     return render_template("home.html", movies=movies)
+
+@app.route("/search")
+def search():
+    search_term = request.args.get("term", "")
+
+    if not search_term:
+        return
+
+    documents = search_movies(redis=r, term=search_term).docs
+
+    movies = []
+    num_movies = 0
+    for document in documents:
+        # display 10 max
+        if num_movies > 9:
+            break
+
+        movies.append(
+            {
+                "id": document.id,
+                "title": document.title,
+                "genres": document.genre.replace("|", ", "),
+                "avg_rating": float(document.avg_rating),
+            }
+        )
+
+        num_movies += 1
+
+
+    return render_template("home.html", movies=movies)
+
 
 
 if __name__ == "__main__":

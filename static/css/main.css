@@ -70,6 +70,34 @@ body {
     gap: 1rem;
 }
 
+.search_bar {
+    background: #020617;
+    border-radius: 0.75rem;
+    margin-top: 1rem;
+    padding: 1rem;
+    border: 1px solid #1f2937;
+}
+
+.input {
+    border-radius: 0.8rem;
+    width: 75%;
+    line-height: 24px;
+    font-size: 13px;
+}
+
+.btn {
+    border-radius: 0.75rem;
+    background: #3B666B;
+    width: 11%;
+}
+
+.btn:hover {
+    transform: translateY(-2px);
+    border-color: #38bdf8;
+    box-shadow: 0 15px 25px rgba(0, 0, 0, 0.5);
+
+}
+
 .movie-card {
     background: #020617;
     border-radius: 0.75rem;

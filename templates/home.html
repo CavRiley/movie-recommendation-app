@@ -6,7 +6,7 @@
 <section class="hero">
     <h2>Polyglot Movie Recs</h2>
     <p>
-        this is a simple page that takes from the redis db, more stuff to come
+        this is a simple page that initially takes the first 8 movies from redis to display and allows you to search for more movies by title
     </p>
 </section>
 
@@ -31,6 +31,17 @@
                 </article>
             {% endfor %}
         </div>
+
+        <form action="{{ url_for('search') }}" method="GET">
+          <div class="search_bar">
+            <label for="term">Search Movies: </label>
+            <input class="input" id="term" name="term" type="text"
+              value="{{ request.args.get('term','') }}"
+              placeholder="Star Wars, Indiana Jones">
+            <button class="btn" type="submit">Search</button>
+          </div>
+        </form>
+
     {% else %}
         <p>No movies found in Redis. Double-check that you’ve populated keys like <code>movie:&lt;id&gt;</code>.</p>
     {% endif %}
