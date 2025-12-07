@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block title %}Home | Polyglot Movie Recs{% endblock %}
+
+{% block content %}
+<section class="hero">
+    <h2>Polyglot Movie Recs</h2>
+    <p>
+        this is a simple page that takes from the redis db, more stuff to come
+    </p>
+</section>
+
+<section class="movie-section">
+    <h3>Sample Movies</h3>
+
+    {% if movies %}
+        <div class="movie-grid">
+            {% for movie in movies %}
+                <article class="movie-card">
+                    <h4 class="movie-title">{{ movie.title }}</h4>
+                    {% if movie.genres %}
+                        <p class="movie-genres">{{ movie.genres }}</p>
+                    {% endif %}
+                    <p class="movie-rating">
+                        {% if movie.avg_rating is not none %}
+                            ⭐ {{ "%.1f"|format(movie.avg_rating) }} / 5
+                        {% else %}
+                            No ratings yet
+                        {% endif %}
+                    </p>
+                </article>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p>No movies found in Redis. Double-check that you’ve populated keys like <code>movie:&lt;id&gt;</code>.</p>
+    {% endif %}
+</section>
+{% endblock %}

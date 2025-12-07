@@ -42,3 +42,13 @@ movie:10
     genre: Action Adventure Thriller
     avg_rating: 3.5405405405405403
 ```
+
+### Run the application
+
+Running the application can be done with
+
+`
+python3 app.py
+`
+
+To view the application, go to [http://127.0.0.1:5000](http://127.0.0.1:5000)
