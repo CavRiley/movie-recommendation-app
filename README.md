@@ -25,3 +25,20 @@ source venv/bin/activate
 `
 pip install -r requirements.txt
 `
+
+### Database Setup
+
+>[!NOTE]
+> This assumes you have the movies and ratings csv files in the root directory
+
+Within the `db` directory in the project there are python scripts to populate the Redis database as well as the _____(need to figure out... prob neo4j) db
+
+The Redis database contains hashes for each movie formatted as such below 
+
+```
+movie:10
+
+    title: GoldenEye (1995)
+    genre: Action Adventure Thriller
+    avg_rating: 3.5405405405405403
+```
