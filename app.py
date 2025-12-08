@@ -1,8 +1,10 @@
-from db.redis_queries import search_movies
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, redirect, url_for, session, flash
 from pathlib import Path
-import os
 from redis import Redis
+from neo4j import GraphDatabase
+from db.redis_queries import search_movies, cache_user_ratings, get_cached_user_ratings
+from db.neo4j_recommender import MovieRecommender
+import os
 
 ROOT = Path(__file__).resolve().parent
 TEMPLATES_DIR = ROOT / "templates"
@@ -14,75 +16,228 @@ app = Flask(
     static_folder=str(STATIC_DIR),
 )
 
+# Secret key for sessions
+app.secret_key = os.urandom(24)
+
+# Database connections
 r = Redis(host="localhost", port=6379, db=0, decode_responses=True)
+neo4jUrl = "bolt://localhost:7687"
+neo4jDriver = GraphDatabase.driver(neo4jUrl, auth=('neo4j', 'password'))
+recommender = MovieRecommender(uri=neo4jUrl, auth=('neo4j', 'password'))
 
 
 @app.route("/")
 def home():
-    # Grab a few movie hashes from Redis: movie:<movieId>
-    keys = r.keys("movie:*")
-    movies = []
+    """Landing page - redirect to login if not logged in"""
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    return redirect(url_for('dashboard'))
 
-    # Just take the first 8 keys for the landing page
-    for key in keys[:8]:
-        data = r.hgetall(key)
-        if not data:
-            continue
 
-        movie_id = key.split("movie:")[-1]
-        title = data.get("title", f"Movie {movie_id}")
-        genres = data.get("genres") or data.get("genre") or ""
-        avg_rating_raw = data.get("avg_rating") or data.get("average_rating")
+@app.route("/login", methods=['GET', 'POST'])
+def login():
+    """User login/registration page"""
+    if request.method == 'POST':
+        user_id = request.form.get('user_id')
+        
+        if not user_id or not user_id.isdigit():
+            flash('Please enter a valid user ID', 'error')
+            return render_template('login.html')
+        
+        user_id = int(user_id)
+        
+        # Check if user exists in Neo4j
+        user_info = recommender.get_or_create_user(user_id)
+        
+        if user_info['exists'] and user_info.get('name'):
+            # Existing user with name
+            session['user_id'] = user_id
+            session['user_name'] = user_info['name']
+            flash(f'Welcome back, {user_info["name"]}!', 'success')
+            return redirect(url_for('dashboard'))
+        elif user_info['exists']:
+            # Existing user without name - ask for it
+            session['user_id'] = user_id
+            return redirect(url_for('set_name'))
+        else:
+            # New user - ask for name
+            session['user_id'] = user_id
+            return redirect(url_for('set_name'))
+    
+    return render_template('login.html')
 
-        try:
-            avg_rating = float(avg_rating_raw) if avg_rating_raw is not None else None
-        except (TypeError, ValueError):
-            avg_rating = None
 
-        movies.append(
-            {
-                "id": movie_id,
-                "title": title,
-                "genres": genres.replace("|", ", "),
-                "avg_rating": avg_rating,
-            }
-        )
+@app.route("/set_name", methods=['GET', 'POST'])
+def set_name():
+    """Set user name for new users"""
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    
+    if request.method == 'POST':
+        name = request.form.get('name')
+        
+        if not name or not name.strip():
+            flash('Please enter a valid name', 'error')
+            return render_template('set_name.html')
+        
+        user_id = session['user_id']
+        
+        # Create/update user with name in Neo4j
+        user_info = recommender.get_or_create_user(user_id, name.strip())
+        session['user_name'] = name.strip()
+        
+        flash(f'Welcome, {name}!', 'success')
+        return redirect(url_for('dashboard'))
+    
+    return render_template('set_name.html')
 
-    # Sort so highest-rated movies float to the top, unrated at the end
-    movies.sort(key=lambda m: (m["avg_rating"] is None, -(m["avg_rating"] or 0)))
 
-    return render_template("home.html", movies=movies)
+@app.route("/dashboard")
+def dashboard():
+    """Main dashboard showing user's rated movies and recommendations"""
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    
+    user_id = session['user_id']
+    user_name = session.get('user_name', f'User {user_id}')
+    
+    # Try to get cached ratings from Redis first
+    cached_ratings = get_cached_user_ratings(r, user_id)
+    
+    if cached_ratings is None:
+        # Not in cache - get from Neo4j and cache
+        user_ratings = recommender.get_user_ratings(user_id)
+        cache_user_ratings(r, user_id, user_ratings, expire_seconds=300)  # 5 min TTL
+    else:
+        user_ratings = cached_ratings
+    
+    # Get recommendations
+    recommendations = recommender.get_recommendations(user_id, limit=5)
+    
+    # Enrich recommendations with genre info from Redis
+    for rec in recommendations:
+        movie_key = f"movie:{rec['movieId']}"
+        movie_data = r.hgetall(movie_key)
+        if movie_data:
+            rec['genres'] = movie_data.get('genre', '').replace(' ', ', ')
+    
+    return render_template(
+        'dashboard.html',
+        user_name=user_name,
+        user_ratings=user_ratings,
+        recommendations=recommendations
+    )
+
 
 @app.route("/search")
 def search():
-    search_term = request.args.get("term", "")
-
+    """Search for movies using Redis full-text search"""
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    
+    search_term = request.args.get("term", "").strip()
+    
     if not search_term:
-        return
-
-    documents = search_movies(redis=r, term=search_term).docs
-
+        flash('Please enter a search term', 'error')
+        return redirect(url_for('dashboard'))
+    
+    user_id = session['user_id']
+    
+    # Get user's rated movies to check if they've seen each result
+    user_ratings_dict = {}
+    cached_ratings = get_cached_user_ratings(r, user_id)
+    if cached_ratings:
+        user_ratings_dict = {rating['movieId']: rating['rating'] for rating in cached_ratings}
+    else:
+        user_ratings = recommender.get_user_ratings(user_id)
+        user_ratings_dict = {rating['movieId']: rating['rating'] for rating in user_ratings}
+    
+    # Search movies in Redis
+    search_results = search_movies(redis=r, term=search_term)
+    
+    if not search_results or not hasattr(search_results, 'docs'):
+        flash('No movies found', 'info')
+        return redirect(url_for('dashboard'))
+    
     movies = []
-    num_movies = 0
-    for document in documents:
-        # display 10 max
-        if num_movies > 9:
-            break
+    for doc in search_results.docs[:10]:  # Limit to 10 results
+        movie_id_str = doc.id.split(':')[-1]
+        try:
+            movie_id = int(movie_id_str)
+        except ValueError:
+            continue
+        
+        user_rating = user_ratings_dict.get(movie_id)
+        has_seen = movie_id in user_ratings_dict
+        
+        movies.append({
+            "id": movie_id,
+            "title": doc.title,
+            "genres": doc.genre.replace(' ', ', '),
+            "avg_rating": float(doc.avg_rating),
+            "has_seen": has_seen,
+            "user_rating": user_rating
+        })
+    
+    return render_template('search_results.html', movies=movies, search_term=search_term)
 
-        movies.append(
-            {
-                "id": document.id,
-                "title": document.title,
-                "genres": document.genre.replace("|", ", "),
-                "avg_rating": float(document.avg_rating),
-            }
-        )
 
-        num_movies += 1
+@app.route("/rate/<int:movie_id>", methods=['POST'])
+def rate_movie(movie_id):
+    """Add/update a rating for a movie"""
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    
+    user_id = session['user_id']
+    rating = request.form.get('rating')
+    
+    try:
+        rating = float(rating)
+        if rating < 0.5 or rating > 5.0:
+            flash('Rating must be between 0.5 and 5.0', 'error')
+            return redirect(request.referrer or url_for('dashboard'))
+    except (TypeError, ValueError):
+        flash('Invalid rating value', 'error')
+        return redirect(request.referrer or url_for('dashboard'))
+    
+    # Add rating to Neo4j
+    success = recommender.add_rating(user_id, movie_id, rating)
+    
+    if success:
+        # Update average rating in Redis
+        movie_key = f"movie:{movie_id}"
+        with neo4jDriver.session() as session_db:
+            result = session_db.run("""
+                MATCH (m:Movie {movieId: $movieId})
+                RETURN m.avgRating as avgRating
+            """, movieId=movie_id)
+            record = result.single()
+            if record:
+                r.hset(movie_key, 'avg_rating', record['avgRating'])
+        
+        # Invalidate user ratings cache
+        cache_key = f"user_ratings:{user_id}"
+        r.delete(cache_key)
+        
+        flash('Rating submitted successfully!', 'success')
+    else:
+        flash('Error submitting rating', 'error')
+    
+    return redirect(request.referrer or url_for('dashboard'))
 
 
-    return render_template("home.html", movies=movies)
+@app.route("/logout")
+def logout():
+    """Log out the user"""
+    session.clear()
+    flash('You have been logged out', 'info')
+    return redirect(url_for('login'))
 
+
+# Note: Database connections (Redis, Neo4j) are kept open for the app lifetime.
+# They will be automatically closed when the application shuts down.
+# Closing them after each request (via teardown_appcontext) would cause
+# "Driver closed" errors on subsequent requests.
 
 
 if __name__ == "__main__":

@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block title %}Login | Polyglot Movie Recs{% endblock %}
+
+{% block content %}
+<section class="hero">
+    <h2>Welcome to Polyglot Movie Recs</h2>
+    <p>
+        Enter your user ID to get personalized movie recommendations based on your viewing history.
+    </p>
+</section>
+
+<section class="movie-section">
+    <div style="max-width: 400px; margin: 2rem auto;">
+        <div class="movie-card" style="padding: 2rem;">
+            <h3 style="margin-top: 0;">Login</h3>
+            
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="flash-message flash-{{ category }}" style="padding: 0.75rem; margin-bottom: 1rem; border-radius: 0.5rem; 
+                            background: {% if category == 'error' %}#991b1b{% elif category == 'success' %}#065f46{% else %}#1e40af{% endif %};">
+                            {{ message }}
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+            
+            <form method="POST">
+                <div style="margin-bottom: 1rem;">
+                    <label for="user_id" style="display: block; margin-bottom: 0.5rem;">User ID:</label>
+                    <input 
+                        type="text" 
+                        id="user_id" 
+                        name="user_id" 
+                        class="input" 
+                        style="width: 100%; padding: 0.5rem; background: #0f172a; border: 1px solid #1f2937; color: #e5e7eb;"
+                        placeholder="Enter your user ID (e.g., 1, 2, 3...)"
+                        required
+                        autofocus
+                    >
+                </div>
+                
+                <button type="submit" class="btn" style="width: 100%; padding: 0.75rem; cursor: pointer;">
+                    Continue
+                </button>
+            </form>
+            
+            <p style="margin-top: 1.5rem; font-size: 0.875rem; color: #9ca3af; text-align: center;">
+                New user? Enter any unused ID to create an account.
+            </p>
+        </div>
+    </div>
+</section>
+{% endblock %}

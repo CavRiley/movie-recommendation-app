@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+
+{% block title %}Search Results | Polyglot Movie Recs{% endblock %}
+
+{% block content %}
+<section class="hero">
+    <h2>Search Results</h2>
+    <p>Results for: <strong>{{ search_term }}</strong></p>
+    <a href="{{ url_for('dashboard') }}" style="color: #38bdf8; text-decoration: none;">← Back to Dashboard</a>
+</section>
+
+<!-- Search Bar -->
+<section class="movie-section">
+    <form action="{{ url_for('search') }}" method="GET">
+        <div class="search_bar">
+            <label for="term">Search Movies: </label>
+            <input class="input" id="term" name="term" type="text"
+                value="{{ search_term }}"
+                placeholder="Star Wars, Indiana Jones..."
+                style="padding: 0.5rem;">
+            <button class="btn" type="submit" style="cursor: pointer;">Search</button>
+        </div>
+    </form>
+</section>
+
+<!-- Search Results -->
+<section class="movie-section">
+    <h3>Found {{ movies|length }} movie(s)</h3>
+    
+    {% if movies %}
+        <div class="movie-grid">
+            {% for movie in movies %}
+                <article class="movie-card">
+                    <h4 class="movie-title">{{ movie.title }}</h4>
+                    {% if movie.genres %}
+                        <p class="movie-genres">{{ movie.genres }}</p>
+                    {% endif %}
+                    <p class="movie-rating">
+                        Avg Rating: ⭐ {{ "%.1f"|format(movie.avg_rating) }} / 5
+                    </p>
+                    
+                    {% if movie.has_seen %}
+                        <div style="margin-top: 0.75rem; padding: 0.5rem; background: #065f46; border-radius: 0.5rem;">
+                            <p style="margin: 0; font-size: 0.875rem;">
+                                ✓ You've seen this
+                            </p>
+                            <p style="margin: 0.25rem 0 0 0; font-weight: 600;">
+                                Your Rating: ⭐ {{ "%.1f"|format(movie.user_rating) }}
+                            </p>
+                        </div>
+                    {% else %}
+                        <!-- Rating Form -->
+                        <form method="POST" action="{{ url_for('rate_movie', movie_id=movie.id) }}" style="margin-top: 1rem;">
+                            <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                <select name="rating" style="flex: 1; padding: 0.5rem; background: #0f172a; border: 1px solid #1f2937; color: #e5e7eb; border-radius: 0.5rem;">
+                                    <option value="5">⭐⭐⭐⭐⭐ (5)</option>
+                                    <option value="4.5">⭐⭐⭐⭐✨ (4.5)</option>
+                                    <option value="4">⭐⭐⭐⭐ (4)</option>
+                                    <option value="3.5">⭐⭐⭐✨ (3.5)</option>
+                                    <option value="3">⭐⭐⭐ (3)</option>
+                                    <option value="2.5">⭐⭐✨ (2.5)</option>
+                                    <option value="2">⭐⭐ (2)</option>
+                                    <option value="1.5">⭐✨ (1.5)</option>
+                                    <option value="1">⭐ (1)</option>
+                                    <option value="0.5">✨ (0.5)</option>
+                                </select>
+                                <button type="submit" style="padding: 0.5rem 1rem; background: #3B666B; border: none; color: #e5e7eb; border-radius: 0.5rem; cursor: pointer;">
+                                    Rate
+                                </button>
+                            </div>
+                        </form>
+                    {% endif %}
+                </article>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p style="color: #9ca3af;">No movies found matching "{{ search_term }}". Try a different search term.</p>
+    {% endif %}
+</section>
+{% endblock %}

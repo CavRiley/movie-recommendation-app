@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard | Polyglot Movie Recs{% endblock %}
+
+{% block content %}
+<section class="hero">
+    <h2>Welcome, {{ user_name }}!</h2>
+    <p>Your personalized movie recommendations and ratings</p>
+    <div style="margin-top: 1rem;">
+        <a href="{{ url_for('logout') }}" style="color: #38bdf8; text-decoration: none; font-size: 0.875rem;">Logout</a>
+    </div>
+</section>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+        <section class="movie-section">
+            {% for category, message in messages %}
+                <div class="flash-message flash-{{ category }}" style="padding: 0.75rem; margin-bottom: 1rem; border-radius: 0.5rem; 
+                    background: {% if category == 'error' %}#991b1b{% elif category == 'success' %}#065f46{% else %}#1e40af{% endif %};">
+                    {{ message }}
+                </div>
+            {% endfor %}
+        </section>
+    {% endif %}
+{% endwith %}
+
+<!-- Search Bar -->
+<section class="movie-section">
+    <form action="{{ url_for('search') }}" method="GET">
+        <div class="search_bar">
+            <label for="term">Search Movies: </label>
+            <input class="input" id="term" name="term" type="text"
+                value="{{ request.args.get('term','') }}"
+                placeholder="Star Wars, Indiana Jones..."
+                style="padding: 0.5rem;">
+            <button class="btn" type="submit" style="cursor: pointer;">Search</button>
+        </div>
+    </form>
+</section>
+
+<!-- Recommendations -->
+{% if recommendations %}
+<section class="movie-section">
+    <h3>Recommended for You</h3>
+    <div class="movie-grid">
+        {% for rec in recommendations %}
+            <article class="movie-card">
+                <h4 class="movie-title">{{ rec.title }}</h4>
+                {% if rec.genres %}
+                    <p class="movie-genres">{{ rec.genres }}</p>
+                {% endif %}
+                <p class="movie-rating">
+                    {% if rec.avgRating is not none %}
+                        ⭐ {{ "%.1f"|format(rec.avgRating) }} / 5
+                    {% else %}
+                        No ratings yet
+                    {% endif %}
+                </p>
+                
+                <!-- Rating Form -->
+                <form method="POST" action="{{ url_for('rate_movie', movie_id=rec.movieId) }}" style="margin-top: 1rem;">
+                    <div style="display: flex; gap: 0.5rem; align-items: center;">
+                        <select name="rating" style="flex: 1; padding: 0.5rem; background: #0f172a; border: 1px solid #1f2937; color: #e5e7eb; border-radius: 0.5rem;">
+                            <option value="5">⭐⭐⭐⭐⭐ (5)</option>
+                            <option value="4.5">⭐⭐⭐⭐✨ (4.5)</option>
+                            <option value="4">⭐⭐⭐⭐ (4)</option>
+                            <option value="3.5">⭐⭐⭐✨ (3.5)</option>
+                            <option value="3">⭐⭐⭐ (3)</option>
+                            <option value="2.5">⭐⭐✨ (2.5)</option>
+                            <option value="2">⭐⭐ (2)</option>
+                            <option value="1.5">⭐✨ (1.5)</option>
+                            <option value="1">⭐ (1)</option>
+                            <option value="0.5">✨ (0.5)</option>
+                        </select>
+                        <button type="submit" style="padding: 0.5rem 1rem; background: #3B666B; border: none; color: #e5e7eb; border-radius: 0.5rem; cursor: pointer;">
+                            Rate
+                        </button>
+                    </div>
+                </form>
+            </article>
+        {% endfor %}
+    </div>
+</section>
+{% endif %}
+
+<!-- User's Rated Movies -->
+{% if user_ratings %}
+<section class="movie-section">
+    <h3>Your Rated Movies</h3>
+    <div class="movie-grid">
+        {% for rating in user_ratings %}
+            <article class="movie-card">
+                <h4 class="movie-title">{{ rating.title or rating.full_title or ('Movie ' + rating.movieId|string) }}</h4>
+                {% if rating.genres %}
+                    <p class="movie-genres">{{ rating.genres }}</p>
+                {% endif %}
+                <div style="margin-top: 0.75rem; padding: 0.75rem; background: #065f46; border-radius: 0.5rem;">
+                    <p style="margin: 0; font-weight: 600; font-size: 1.1rem;">
+                        Your Rating: ⭐ {{ "%.1f"|format(rating.rating) }} / 5
+                    </p>
+                </div>
+                
+                <!-- Update Rating Form -->
+                <form method="POST" action="{{ url_for('rate_movie', movie_id=rating.movieId) }}" style="margin-top: 1rem;">
+                    <div style="display: flex; gap: 0.5rem; align-items: center;">
+                        <select name="rating" style="flex: 1; padding: 0.5rem; background: #0f172a; border: 1px solid #1f2937; color: #e5e7eb; border-radius: 0.5rem;">
+                            <option value="5" {% if rating.rating == 5 %}selected{% endif %}>⭐⭐⭐⭐⭐ (5)</option>
+                            <option value="4.5" {% if rating.rating == 4.5 %}selected{% endif %}>⭐⭐⭐⭐✨ (4.5)</option>
+                            <option value="4" {% if rating.rating == 4 %}selected{% endif %}>⭐⭐⭐⭐ (4)</option>
+                            <option value="3.5" {% if rating.rating == 3.5 %}selected{% endif %}>⭐⭐⭐✨ (3.5)</option>
+                            <option value="3" {% if rating.rating == 3 %}selected{% endif %}>⭐⭐⭐ (3)</option>
+                            <option value="2.5" {% if rating.rating == 2.5 %}selected{% endif %}>⭐⭐✨ (2.5)</option>
+                            <option value="2" {% if rating.rating == 2 %}selected{% endif %}>⭐⭐ (2)</option>
+                            <option value="1.5" {% if rating.rating == 1.5 %}selected{% endif %}>⭐✨ (1.5)</option>
+                            <option value="1" {% if rating.rating == 1 %}selected{% endif %}>⭐ (1)</option>
+                            <option value="0.5" {% if rating.rating == 0.5 %}selected{% endif %}>✨ (0.5)</option>
+                        </select>
+                        <button type="submit" style="padding: 0.5rem 1rem; background: #3B666B; border: none; color: #e5e7eb; border-radius: 0.5rem; cursor: pointer;">
+                            Update
+                        </button>
+                    </div>
+                </form>
+            </article>
+        {% endfor %}
+    </div>
+</section>
+{% else %}
+<section class="movie-section">
+    <h3>Your Rated Movies</h3>
+    <p style="color: #9ca3af;">You haven't rated any movies yet. Start by rating some recommendations above or search for movies!</p>
+</section>
+{% endif %}
+{% endblock %}
+
