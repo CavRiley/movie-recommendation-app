@@ -219,6 +219,74 @@ class Neo4jMovieLensImporter:
             print("Computed movie statistics (avgRating, ratingCount).")
 
 
+    def populate_redis(self, redis_host="localhost", redis_port=6379, redis_db=0):
+        """
+        Extract all movies from Neo4j and load them into Redis as hashes.
+        Also creates a RediSearch full-text index over movie titles.
+
+        Required by Part 3 of the project spec.
+        """
+
+        from redis import Redis
+
+        r = Redis(host=redis_host, port=redis_port, db=redis_db)
+
+        print("Fetching movies + genres + avg ratings from Neo4j...")
+
+        with self.driver.session() as session:
+            results = session.run("""
+                MATCH (m:Movie)
+                OPTIONAL MATCH (m)-[:HAS_GENRE]->(g:Genre)
+                WITH m, collect(g.name) AS genres
+                RETURN m.movieId AS movieId,
+                       m.title AS title,
+                       genres,
+                       coalesce(m.avgRating, 0.0) AS avgRating
+            """)
+
+            count = 0
+            for record in results:
+                movie_id = record["movieId"]
+                title = record["title"] or ""
+                genres = record["genres"] or []
+                avg_rating = float(record["avgRating"])
+
+                # Store as a Redis hash (one movie = one hash)
+                r.hset(
+                    name=f"movie:{movie_id}",
+                    mapping={
+                        "title": title,
+                        "genre": "|".join(genres),
+                        "avg_rating": avg_rating,
+                    }
+                )
+                count += 1
+
+        print(f"✔ Loaded {count} movies into Redis.")
+
+        # Create the RediSearch index (idempotent)
+        try:
+            r.execute_command(
+                "FT.CREATE", "movies_index",
+                "ON", "HASH",
+                "PREFIX", "1", "movie:",
+                "SCHEMA",
+                "title", "TEXT",
+                "genre", "TEXT",
+                "avg_rating", "NUMERIC"
+            )
+            print("✔ Created RediSearch index movies_index.")
+        except Exception as e:
+            # Redis throws an error if index already exists — suppress it
+            if "Index already exists" in str(e):
+                print("Index movies_index already exists — skipping.")
+            else:
+                raise
+
+        r.quit()
+        print("Redis connection closed.")
+
+
 def main():
     # Using the same connection pattern as your main app
     neo4jUrl = "bolt://localhost:7687"
@@ -247,7 +315,10 @@ def main():
         # Step 4: Compute statistics
         print("\nComputing movie statistics...")
         importer.compute_movie_statistics()
-        
+
+        print("\nLoading movies into Redis...")
+        importer.populate_redis()
+
         print("\n✓ Data import completed successfully!")
         
     finally:
