@@ -107,7 +107,7 @@ def dashboard():
     if cached_ratings is None:
         # Not in cache - get from Neo4j and cache
         user_ratings = recommender.get_user_ratings(user_id)
-        cache_user_ratings(r, user_id, user_ratings, expire_seconds=300)  # 5 min TTL
+        cache_user_ratings(r, user_id, user_ratings, expire_seconds=1800)  # 30 min TTL
     else:
         user_ratings = cached_ratings
     

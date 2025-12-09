@@ -13,7 +13,7 @@ def search_movies(redis: Redis, term: str):
         return None
 
 
-def cache_user_ratings(redis: Redis, user_id: int, ratings: List[Dict], expire_seconds: int = 300):
+def cache_user_ratings(redis: Redis, user_id: int, ratings: List[Dict], expire_seconds: int = 1800):
     """
     Cache user ratings in Redis with expiration.
     
@@ -21,11 +21,11 @@ def cache_user_ratings(redis: Redis, user_id: int, ratings: List[Dict], expire_s
         redis: Redis connection
         user_id: User ID
         ratings: List of rating dictionaries from Neo4j
-        expire_seconds: Cache expiration time (default 5 minutes)
+        expire_seconds: Cache expiration time (default 30 minutes)
     
     Design choice: Using JSON string for simplicity and flexibility.
-    The 5-minute TTL balances freshness with cache effectiveness.
-    User ratings don't change frequently, so 5 minutes is reasonable.
+    The 30-minute TTL balances freshness with cache effectiveness.
+    User ratings don't change frequently, so 30 minutes is reasonable.
     """
     cache_key = f"user_ratings:{user_id}"
     
