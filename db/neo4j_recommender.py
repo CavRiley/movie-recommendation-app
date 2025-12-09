@@ -26,11 +26,23 @@ class MovieRecommender:
             record = result.single()
             
             if record:
-                return {
-                    'userId': record['userId'],
-                    'name': record['name'],
-                    'exists': True
-                }
+                # User exists - update name if provided
+                if name:
+                    session.run("""
+                        MATCH (u:User {userId: $userId})
+                        SET u.name = $name
+                    """, userId=user_id, name=name)
+                    return {
+                        'userId': record['userId'],
+                        'name': name,
+                        'exists': True
+                    }
+                else:
+                    return {
+                        'userId': record['userId'],
+                        'name': record['name'],
+                        'exists': True
+                    }
             else:
                 # Create new user
                 if name:
@@ -39,7 +51,10 @@ class MovieRecommender:
                     """, userId=user_id, name=name)
                     return {'userId': user_id, 'name': name, 'exists': False}
                 else:
-                    return {'exists': False}
+                    session.run("""
+                        CREATE (u:User {userId: $userId})
+                    """, userId=user_id)
+                    return {'userId': user_id, 'exists': False}
     
     def get_user_ratings(self, user_id: int) -> List[Dict]:
         """Get all movies rated by a user"""

@@ -121,6 +121,13 @@ def dashboard():
         if movie_data:
             rec['genres'] = movie_data.get('genre', '').replace(' ', ', ')
     
+    # Enrich user ratings with genre info from Redis
+    for rating in user_ratings:
+        movie_key = f"movie:{rating['movieId']}"
+        movie_data = r.hgetall(movie_key)
+        if movie_data:
+            rating['genres'] = movie_data.get('genre', '').replace(' ', ', ')
+    
     return render_template(
         'dashboard.html',
         user_name=user_name,

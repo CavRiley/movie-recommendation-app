@@ -1,4 +1,3 @@
-import csv
 from pathlib import Path
 from neo4j import GraphDatabase
 import pandas as pd
@@ -299,7 +298,7 @@ def main():
         print("Starting MovieLens data import to Neo4j...")
         
         # Optional: Clear existing data
-        # importer.clear_database()
+        importer.clear_database()
         
         # Step 1: Create constraints and indexes
         importer.create_constraints_and_indexes()
