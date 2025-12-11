@@ -27,13 +27,39 @@
 <!-- Search Bar -->
 <section class="movie-section">
     <form action="{{ url_for('search') }}" method="GET">
-        <div class="search_bar">
-            <label for="term">Search Movies: </label>
+        <div class="search_bar" style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+            <label for="term" style="min-width: 100px;">Search Movies: </label>
             <input class="input" id="term" name="term" type="text"
                 value="{{ request.args.get('term','') }}"
                 placeholder="Star Wars, Indiana Jones..."
-                style="padding: 0.5rem;">
-            <button class="btn" type="submit" style="cursor: pointer;">Search</button>
+                style="padding: 0.5rem; flex: 1; min-width: 200px;">
+            <button class="btn" type="submit" style="cursor: pointer; padding: 0.5rem 1rem; font-size: inherit;">Search</button>
+            <a href="{{ url_for('random_movie') }}" class="btn" style="cursor: pointer; padding: 0.5rem 1rem; text-decoration: none; display: inline-block; background: #3B666B; color: #e5e7eb; border: none; border-radius: 0.5rem; font-size: inherit;">
+                Random Movie
+            </a>
+        </div>
+        <div style="margin-top: 1rem; display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
+            <div style="display: flex; gap: 0.5rem; align-items: center;">
+                <label for="limit" style="font-size: 0.875rem;">Results: </label>
+                <select name="limit" id="limit" style="padding: 0.5rem; background: #0f172a; border: 1px solid #1f2937; color: #e5e7eb; border-radius: 0.5rem;">
+                    <option value="10" {% if request.args.get('limit', '10') == '10' %}selected{% endif %}>10</option>
+                    <option value="25" {% if request.args.get('limit') == '25' %}selected{% endif %}>25</option>
+                    <option value="50" {% if request.args.get('limit') == '50' %}selected{% endif %}>50</option>
+                    <option value="100" {% if request.args.get('limit') == '100' %}selected{% endif %}>100</option>
+                </select>
+            </div>
+            <div style="display: flex; gap: 0.5rem; align-items: center;">
+                <label for="sort_by" style="font-size: 0.875rem;">Sort by: </label>
+                <select name="sort_by" id="sort_by" style="padding: 0.5rem; background: #0f172a; border: 1px solid #1f2937; color: #e5e7eb; border-radius: 0.5rem;">
+                    <option value="relevance" {% if request.args.get('sort_by', 'relevance') == 'relevance' %}selected{% endif %}>Relevance</option>
+                    <option value="rating_high" {% if request.args.get('sort_by') == 'rating_high' %}selected{% endif %}>Rating (High to Low)</option>
+                    <option value="rating_low" {% if request.args.get('sort_by') == 'rating_low' %}selected{% endif %}>Rating (Low to High)</option>
+                    <option value="title_asc" {% if request.args.get('sort_by') == 'title_asc' %}selected{% endif %}>Title (A-Z)</option>
+                    <option value="title_desc" {% if request.args.get('sort_by') == 'title_desc' %}selected{% endif %}>Title (Z-A)</option>
+                    <option value="year_desc" {% if request.args.get('sort_by') == 'year_desc' %}selected{% endif %}>Year (Newest First)</option>
+                    <option value="year_asc" {% if request.args.get('sort_by') == 'year_asc' %}selected{% endif %}>Year (Oldest First)</option>
+                </select>
+            </div>
         </div>
     </form>
 </section>

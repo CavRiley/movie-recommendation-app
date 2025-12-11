@@ -2,7 +2,7 @@ from flask import Flask, render_template, request, redirect, url_for, session, f
 from pathlib import Path
 from redis import Redis
 from neo4j import GraphDatabase
-from db.redis_queries import search_movies, cache_user_ratings, get_cached_user_ratings
+from db.redis_queries import search_movies, cache_user_ratings, get_cached_user_ratings, get_random_movie
 from db.neo4j_recommender import MovieRecommender
 import os
 
@@ -143,6 +143,13 @@ def search():
         return redirect(url_for('login'))
     
     search_term = request.args.get("term", "").strip()
+    limit = int(request.args.get("limit", 10))
+    sort_by = request.args.get("sort_by", "relevance")  # relevance, rating_high, rating_low, title_asc, title_desc, year_asc, year_desc
+    
+    # Validate limit
+    valid_limits = [10, 25, 50, 100]
+    if limit not in valid_limits:
+        limit = 10
     
     if not search_term:
         flash('Please enter a search term', 'error')
@@ -167,13 +174,16 @@ def search():
         return redirect(url_for('dashboard'))
     
     movies = []
-    for doc in search_results.docs[:10]:  # Limit to 10 results
+    movie_ids = []
+    # Get all results first (we'll limit after sorting)
+    for doc in search_results.docs:
         movie_id_str = doc.id.split(':')[-1]
         try:
             movie_id = int(movie_id_str)
         except ValueError:
             continue
         
+        movie_ids.append(movie_id)
         user_rating = user_ratings_dict.get(movie_id)
         has_seen = movie_id in user_ratings_dict
         
@@ -182,11 +192,102 @@ def search():
             "title": doc.title,
             "genres": doc.genre.replace(' ', ', '),
             "avg_rating": float(doc.avg_rating),
+            "year": None,  # Will be populated if needed
             "has_seen": has_seen,
             "user_rating": user_rating
         })
     
-    return render_template('search_results.html', movies=movies, search_term=search_term)
+    # Fetch years from Neo4j in batch if needed for sorting
+    if sort_by in ['year_asc', 'year_desc'] and movie_ids:
+        year_map = {}
+        with neo4jDriver.session() as session_db:
+            result = session_db.run("""
+                MATCH (m:Movie)
+                WHERE m.movieId IN $movieIds
+                RETURN m.movieId as movieId, m.year as year
+            """, movieIds=movie_ids)
+            for record in result:
+                year_map[record['movieId']] = record['year']
+        
+        # Update movies with year data
+        for movie in movies:
+            movie['year'] = year_map.get(movie['id'])
+    
+    # Apply sorting
+    if sort_by == "rating_high":
+        movies.sort(key=lambda x: x['avg_rating'], reverse=True)
+    elif sort_by == "rating_low":
+        movies.sort(key=lambda x: x['avg_rating'])
+    elif sort_by == "title_asc":
+        movies.sort(key=lambda x: x['title'].lower())
+    elif sort_by == "title_desc":
+        movies.sort(key=lambda x: x['title'].lower(), reverse=True)
+    elif sort_by == "year_asc":
+        movies.sort(key=lambda x: x['year'] if x['year'] else 0)
+    elif sort_by == "year_desc":
+        movies.sort(key=lambda x: x['year'] if x['year'] else 9999, reverse=True)
+    # "relevance" keeps the original order from Redis search
+    
+    # Apply limit after sorting
+    movies = movies[:limit]
+    
+    return render_template('search_results.html', 
+                         movies=movies, 
+                         search_term=search_term,
+                         limit=limit,
+                         sort_by=sort_by)
+
+
+@app.route("/random")
+def random_movie():
+    """Get a random movie and show it in search results"""
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    
+    user_id = session['user_id']
+    
+    # Get random movie from Redis
+    random_movie_data = get_random_movie(r)
+    
+    if not random_movie_data:
+        flash('Could not find a random movie', 'error')
+        return redirect(url_for('dashboard'))
+    
+    # Get user's rated movies
+    user_ratings_dict = {}
+    cached_ratings = get_cached_user_ratings(r, user_id)
+    if cached_ratings:
+        user_ratings_dict = {rating['movieId']: rating['rating'] for rating in cached_ratings}
+    else:
+        user_ratings = recommender.get_user_ratings(user_id)
+        user_ratings_dict = {rating['movieId']: rating['rating'] for rating in user_ratings}
+    
+    # Get year from Neo4j
+    year = None
+    with neo4jDriver.session() as session_db:
+        result = session_db.run("""
+            MATCH (m:Movie {movieId: $movieId})
+            RETURN m.year as year
+        """, movieId=random_movie_data['movieId'])
+        record = result.single()
+        if record:
+            year = record['year']
+    
+    movie = {
+        "id": random_movie_data['movieId'],
+        "title": random_movie_data['title'],
+        "genres": random_movie_data['genres'].replace(' ', ', '),
+        "avg_rating": random_movie_data['avg_rating'],
+        "year": year,
+        "has_seen": random_movie_data['movieId'] in user_ratings_dict,
+        "user_rating": user_ratings_dict.get(random_movie_data['movieId'])
+    }
+    
+    return render_template('search_results.html',
+                         movies=[movie],
+                         search_term="Random Movie",
+                         limit=10,
+                         sort_by="relevance")
 
 
 @app.route("/rate/<int:movie_id>", methods=['POST'])

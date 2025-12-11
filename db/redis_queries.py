@@ -1,6 +1,36 @@
 from redis import Redis
 import json
+import random
 from typing import List, Dict, Optional
+
+
+def get_random_movie(redis: Redis) -> Optional[Dict]:
+    """Get a random movie from Redis"""
+    try:
+        # Get all movie keys
+        movie_keys = redis.keys("movie:*")
+        if not movie_keys:
+            return None
+        
+        # Pick a random movie key
+        random_key = random.choice(movie_keys)
+        movie_data = redis.hgetall(random_key)
+        
+        if not movie_data:
+            return None
+        
+        # Extract movie ID from key (format: "movie:123")
+        movie_id = int(random_key.split(':')[-1])
+        
+        return {
+            'movieId': movie_id,
+            'title': movie_data.get('title', ''),
+            'genres': movie_data.get('genre', ''),
+            'avg_rating': float(movie_data.get('avg_rating', 0.0))
+        }
+    except Exception as e:
+        print(f"Error getting random movie: {e}")
+        return None
 
 
 def search_movies(redis: Redis, term: str):
