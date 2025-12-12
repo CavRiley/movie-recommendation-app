@@ -1,23 +1,22 @@
 from neo4j import GraphDatabase
 from typing import List, Dict, Optional
 
-
+# movie recommender class
 class MovieRecommender:
-    """
-    Hybrid recommendation system using Neo4j graph database.
-    Combines collaborative filtering and content-based filtering.
-    """
-    
+    # hybrid recommendation system using neo4j graph database
+    # combines collaborative filtering and content-based filtering
     def __init__(self, uri="bolt://localhost:7687", auth=('neo4j', 'password')):
         self.driver = GraphDatabase.driver(uri, auth=auth)
     
+    # close driver
     def close(self):
         self.driver.close()
     
+    # get or create user
     def get_or_create_user(self, user_id: int, name: Optional[str] = None) -> Dict:
-        """Get existing user or create new one with name"""
+        # get existing user or create new one with name
         with self.driver.session() as session:
-            # Check if user exists
+            # check if user exists
             result = session.run("""
                 MATCH (u:User {userId: $userId})
                 RETURN u.userId as userId, u.name as name
@@ -26,7 +25,7 @@ class MovieRecommender:
             record = result.single()
             
             if record:
-                # User exists - update name if provided
+                # user exists - update name if provided
                 if name:
                     session.run("""
                         MATCH (u:User {userId: $userId})
@@ -44,7 +43,7 @@ class MovieRecommender:
                         'exists': True
                     }
             else:
-                # Create new user
+                # create new user
                 if name:
                     session.run("""
                         CREATE (u:User {userId: $userId, name: $name})
@@ -56,8 +55,8 @@ class MovieRecommender:
                     """, userId=user_id)
                     return {'userId': user_id, 'exists': False}
     
+    # get user ratings
     def get_user_ratings(self, user_id: int) -> List[Dict]:
-        """Get all movies rated by a user"""
         with self.driver.session() as session:
             result = session.run("""
                 MATCH (u:User {userId: $userId})-[r:RATED]->(m:Movie)
@@ -71,11 +70,11 @@ class MovieRecommender:
             
             return [dict(record) for record in result]
     
+    # add rating
     def add_rating(self, user_id: int, movie_id: int, rating: float) -> bool:
-        """Add or update a user's rating for a movie"""
         with self.driver.session() as session:
             try:
-                # Check if rating exists and update or create
+                # check if rating exists and update or create
                 session.run("""
                     MATCH (u:User {userId: $userId})
                     MATCH (m:Movie {movieId: $movieId})
@@ -84,7 +83,7 @@ class MovieRecommender:
                         r.timestamp = timestamp()
                 """, userId=user_id, movieId=movie_id, rating=rating)
                 
-                # Update movie average rating
+                # update movie average rating
                 session.run("""
                     MATCH (m:Movie {movieId: $movieId})<-[r:RATED]-()
                     WITH m, avg(r.rating) as avgRating, count(r) as ratingCount
@@ -98,18 +97,15 @@ class MovieRecommender:
                 return False
     
     def get_collaborative_recommendations(self, user_id: int, limit: int = 5) -> List[Dict]:
-        """
-        Collaborative filtering: Find similar users and recommend movies they liked.
-        
-        Strategy:
-        1. Find users who rated similar movies with similar ratings
-        2. Get movies those similar users rated highly
-        3. Filter out movies the target user has already rated
-        4. Rank by weighted score based on similarity and rating
-        """
+        # collaborative filtering: find similar users and recommend movies they liked
+        # strategy:
+        # 1. find users who rated similar movies with similar ratings
+        # 2. get movies those similar users rated highly
+        # 3. filter out movies the target user has already rated
+        # 4. rank by weighted score based on similarity and rating
         with self.driver.session() as session:
             result = session.run("""
-                // Find similar users based on common highly-rated movies
+                // find similar users based on common highly-rated movies
                 MATCH (target:User {userId: $userId})-[r1:RATED]->(m:Movie)<-[r2:RATED]-(other:User)
                 WHERE r1.rating >= 3.5 AND r2.rating >= 3.5 AND target <> other
                 
@@ -153,14 +149,11 @@ class MovieRecommender:
             return [dict(record) for record in result]
     
     def get_content_based_recommendations(self, user_id: int, limit: int = 5) -> List[Dict]:
-        """
-        Content-based filtering: Recommend movies similar to those the user liked.
-        
-        Strategy:
-        1. Find genres the user likes based on their ratings
-        2. Recommend highly-rated movies in those genres
-        3. Filter out movies already rated
-        """
+        # content-based filtering: recommend movies similar to those the user liked
+        # strategy:
+        # 1. find genres the user likes based on their ratings
+        # 2. recommend highly-rated movies in those genres
+        # 3. filter out movies already rated
         with self.driver.session() as session:
             result = session.run("""
                 // Find genres the user likes
@@ -198,23 +191,20 @@ class MovieRecommender:
             return [dict(record) for record in result]
     
     def get_hybrid_recommendations(self, user_id: int, limit: int = 5) -> List[Dict]:
-        """
-        Hybrid approach: Combine collaborative and content-based recommendations.
-        
-        This provides a balanced set of recommendations that considers both
-        what similar users like and what aligns with the user's preferences.
-        """
-        # Get more recommendations from each method
+        # hybrid approach: combine collaborative and content-based recommendations
+        # this provides a balanced set of recommendations that considers both
+        # what similar users like and what aligns with the user's preferences
+        # get more recommendations from each method
         collab_recs = self.get_collaborative_recommendations(user_id, limit=limit * 2)
         content_recs = self.get_content_based_recommendations(user_id, limit=limit * 2)
         
-        # Create a combined ranking
+        # create a combined ranking
         movie_scores = {}
         
-        # Add collaborative filtering scores (weighted higher for users with more ratings)
+        # add collaborative filtering scores (weighted higher for users with more ratings)
         for i, rec in enumerate(collab_recs):
             movie_id = rec['movieId']
-            # Higher position = higher score
+            # higher position = higher score
             collab_score = (len(collab_recs) - i) * 2.0
             movie_scores[movie_id] = {
                 'movie': rec,
@@ -222,13 +212,13 @@ class MovieRecommender:
                 'source': 'collaborative'
             }
         
-        # Add content-based scores
+        # add content-based scores
         for i, rec in enumerate(content_recs):
             movie_id = rec['movieId']
             content_score = (len(content_recs) - i) * 1.5
             
             if movie_id in movie_scores:
-                # Movie appears in both - boost its score
+                # movie appears in both - boost its score
                 movie_scores[movie_id]['score'] += content_score
                 movie_scores[movie_id]['source'] = 'hybrid'
             else:
@@ -238,14 +228,14 @@ class MovieRecommender:
                     'source': 'content'
                 }
         
-        # Sort by combined score and return top N
+        # sort by combined score and return top N
         sorted_recs = sorted(
             movie_scores.values(),
             key=lambda x: x['score'],
             reverse=True
         )[:limit]
         
-        # Format the results
+        # format the results
         results = []
         for item in sorted_recs:
             movie = item['movie']
@@ -262,9 +252,7 @@ class MovieRecommender:
         return results
     
     def get_popular_recommendations(self, user_id: int, limit: int = 5) -> List[Dict]:
-        """
-        Fallback: Recommend popular movies for users with few/no ratings.
-        """
+        # recommend popular movies for users with few/no ratings
         with self.driver.session() as session:
             result = session.run("""
                 MATCH (m:Movie)
@@ -289,7 +277,7 @@ class MovieRecommender:
         Main recommendation method. Automatically selects the best strategy
         based on available data.
         """
-        # Check how many ratings the user has
+        # check how many ratings the user has
         with self.driver.session() as session:
             result = session.run("""
                 MATCH (u:User {userId: $userId})-[:RATED]->()
@@ -298,19 +286,19 @@ class MovieRecommender:
             
             rating_count = result.single()['ratingCount']
         
-        # Choose strategy based on available data
+        # choose strategy based on available data
         if rating_count == 0:
-            # New user - use popular movies
+            # new user - use popular movies
             return self.get_popular_recommendations(user_id, limit)
         elif rating_count < 5:
-            # Few ratings - prefer content-based
+            # few ratings - prefer content-based
             return self.get_content_based_recommendations(user_id, limit)
         else:
-            # Enough data - use hybrid approach
+            # enough data - use hybrid approach
             return self.get_hybrid_recommendations(user_id, limit)
 
 
-# Example usage
+# example usage
 if __name__ == "__main__":
     neo4jUrl = "bolt://localhost:7687"
     recommender = MovieRecommender(
@@ -319,8 +307,8 @@ if __name__ == "__main__":
     )
     
     try:
-        # Test with user ID 1
-        user_id = 1
+        # test with user ID 1
+        user_id = 2
         
         print(f"Getting recommendations for user {user_id}...")
         recommendations = recommender.get_recommendations(user_id, limit=5)
@@ -331,6 +319,6 @@ if __name__ == "__main__":
             print(f"   Avg Rating: {rec.get('avgRating', 0):.2f}")
             print(f"   Source: {rec.get('source', 'N/A')}")
             print()
-        
+    # close recommender
     finally:
         recommender.close()
