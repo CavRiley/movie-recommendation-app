@@ -31,7 +31,14 @@ pip install -r requirements.txt
 >[!NOTE]
 > This assumes you have the movies and ratings csv files in the root directory
 
-Within the `db` directory in the project there are python scripts to populate the Redis database as well as the _____(need to figure out... prob neo4j) db
+Within the `db` directory in the project there is a python script to populate databases. It assumes your password for neo4j is "password".
+
+WARNING: It will erase your database before running, if you don't want that to happen, comment out line 325 in db/populate_dbs.py
+`
+python3 db/populate_dbs.py
+`
+
+run this to populate your databases
 
 The Redis database contains hashes for each movie formatted as such below 
 
