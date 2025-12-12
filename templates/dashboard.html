@@ -44,8 +44,6 @@
                 <select name="limit" id="limit" style="padding: 0.5rem; background: #0f172a; border: 1px solid #1f2937; color: #e5e7eb; border-radius: 0.5rem;">
                     <option value="10" {% if request.args.get('limit', '10') == '10' %}selected{% endif %}>10</option>
                     <option value="25" {% if request.args.get('limit') == '25' %}selected{% endif %}>25</option>
-                    <option value="50" {% if request.args.get('limit') == '50' %}selected{% endif %}>50</option>
-                    <option value="100" {% if request.args.get('limit') == '100' %}selected{% endif %}>100</option>
                 </select>
             </div>
             <div style="display: flex; gap: 0.5rem; align-items: center;">

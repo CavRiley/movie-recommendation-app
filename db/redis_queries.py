@@ -1,5 +1,6 @@
 from redis import Redis
 import json
+from redis.commands.search.query import Query
 import random
 from typing import List, Dict, Optional
 
@@ -32,10 +33,11 @@ def get_random_movie(redis: Redis) -> Optional[Dict]:
         print(f"Error getting random movie: {e}")
         return None
 
-
-def search_movies(redis: Redis, term: str):
+# searching movies in redis
+def search_movies(redis: Redis, term: str, limit: int):
     try:
-        res = redis.ft("movies_index").search(term)
+        query = Query(term).paging(0, limit)
+        res = redis.ft("movies_index").search(query)
         return res
     except Exception as e:
         print(f"Search error: {e}")
