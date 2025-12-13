@@ -38,6 +38,9 @@ pip install -r requirements.txt
 
 Within the `db` directory in the project there is a python script to populate databases. It assumes your password for neo4j is "password".
 
+>[!IMPORTANT]
+> Your Neo4j instance needs the Graph Data Science (GDS) plugin
+
 WARNING: It will erase your Neo4j database before running(you need to manually erase redis database, if needed), if you don't want that to happen, comment out line 325 in db/populate_dbs.py
 
 run this to populate your databases ( make sure to have redis and Neo4j running before doing so)
