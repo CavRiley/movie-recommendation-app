@@ -76,14 +76,3 @@ def get_cached_user_ratings(redis: Redis, user_id: int) -> Optional[List[Dict]]:
     except Exception as e:
         print(f"Error retrieving cached ratings: {e}")
         return None
-
-# update the average rating for a movie in redis
-def update_movie_avg_rating(redis: Redis, movie_id: int, new_avg_rating: float):
-    movie_key = f"movie:{movie_id}"
-    
-    try:
-        redis.hset(movie_key, 'avg_rating', new_avg_rating)
-        return True
-    except Exception as e:
-        print(f"Error updating movie rating: {e}")
-        return False

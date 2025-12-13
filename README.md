@@ -33,22 +33,13 @@ pip install -r requirements.txt
 
 Within the `db` directory in the project there is a python script to populate databases. It assumes your password for neo4j is "password".
 
-WARNING: It will erase your database before running, if you don't want that to happen, comment out line 325 in db/populate_dbs.py
-`
-python3 db/populate_dbs.py
-`
+WARNING: It will erase your Neo4j database before running(you need to manually erase redis database, if needed), if you don't want that to happen, comment out line 325 in db/populate_dbs.py
 
 run this to populate your databases
 
-The Redis database contains hashes for each movie formatted as such below 
-
-```
-movie:10
-
-    title: GoldenEye (1995)
-    genre: Action Adventure Thriller
-    avg_rating: 3.5405405405405403
-```
+`
+python3 db/populate_dbs.py
+`
 
 ### Run the application
 
@@ -59,3 +50,7 @@ python3 app.py
 `
 
 To view the application, go to [http://127.0.0.1:5000](http://127.0.0.1:5000)
+
+
+>[!CAUTION]
+> The filters under the search bar are only applied when you hit search again

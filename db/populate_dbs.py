@@ -266,7 +266,7 @@ def load_movies_to_redis(redis_client, movies):
             name=f"movie:{movie['movieId']}",
             mapping={
                 "title": movie['title'],
-                "genre": "|".join(movie['genres']),
+                "genre": " ".join(movie['genres']),
                 "avg_rating": movie['avgRating'],
             }
         )

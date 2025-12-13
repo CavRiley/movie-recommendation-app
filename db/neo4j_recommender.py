@@ -97,41 +97,43 @@ class MovieRecommender:
                 return False
     
     def get_collaborative_recommendations(self, user_id: int, limit: int = 5) -> List[Dict]:
-        # collaborative filtering: find similar users and recommend movies they liked
-        # strategy:
-        # 1. find users who rated similar movies with similar ratings
-        # 2. get movies those similar users rated highly
-        # 3. filter out movies the target user has already rated
-        # 4. rank by weighted score based on similarity and rating
+        # collaborative filtering using GDS COSINE SIMILARITY
+        # uses the Graph Data Science library's built-in cosine similarity function
         with self.driver.session() as session:
             result = session.run("""
-                // find similar users based on common highly-rated movies
+                // Find users who have rated movies in common with target user
                 MATCH (target:User {userId: $userId})-[r1:RATED]->(m:Movie)<-[r2:RATED]-(other:User)
-                WHERE r1.rating >= 3.5 AND r2.rating >= 3.5 AND target <> other
+                WHERE target <> other
                 
-                // Calculate similarity score (number of commonly liked movies)
-                WITH other, count(DISTINCT m) as commonMovies, 
-                     sum(abs(r1.rating - r2.rating)) as ratingDiff
+                // Collect rating vectors for each user pair
+                WITH target, other,
+                     collect(r1.rating) as targetRatings,
+                     collect(r2.rating) as otherRatings,
+                     count(m) as commonMovies
                 WHERE commonMovies >= 3
                 
-                // Calculate similarity (more common movies, less rating difference = more similar)
-                WITH other, commonMovies, 
-                     (commonMovies * 1.0) / (1.0 + ratingDiff) as similarity
-                ORDER BY similarity DESC
+                // Calculate cosine similarity using GDS function
+                WITH target, other,
+                     gds.similarity.cosine(targetRatings, otherRatings) as cosineSimilarity,
+                     commonMovies
+                WHERE cosineSimilarity > 0
+                ORDER BY cosineSimilarity DESC
                 LIMIT 20
                 
                 // Get highly-rated movies from similar users that target hasn't seen
                 MATCH (other)-[r:RATED]->(rec:Movie)
                 WHERE r.rating >= 3.5
                   AND NOT EXISTS {
-                      MATCH (target:User {userId: $userId})-[:RATED]->(rec)
+                      MATCH (target)-[:RATED]->(rec)
                   }
                 
                 // Aggregate and rank recommendations
+                // Weight by cosine similarity and rating
                 WITH rec, 
-                     sum(similarity * r.rating) as score,
+                     sum(cosineSimilarity * r.rating) as score,
                      avg(r.rating) as avgRatingBySimilarUsers,
                      count(DISTINCT other) as recommendedBy,
+                     avg(cosineSimilarity) as avgSimilarity,
                      rec.avgRating as overallAvgRating
                 
                 RETURN rec.movieId as movieId,
@@ -141,6 +143,7 @@ class MovieRecommender:
                        overallAvgRating,
                        avgRatingBySimilarUsers,
                        recommendedBy,
+                       avgSimilarity,
                        score
                 ORDER BY score DESC, overallAvgRating DESC
                 LIMIT $limit
@@ -209,6 +212,8 @@ class MovieRecommender:
             movie_scores[movie_id] = {
                 'movie': rec,
                 'score': collab_score,
+                'collab_score': collab_score,
+                'content_score': 0,
                 'source': 'collaborative'
             }
         
@@ -220,11 +225,14 @@ class MovieRecommender:
             if movie_id in movie_scores:
                 # movie appears in both - boost its score
                 movie_scores[movie_id]['score'] += content_score
+                movie_scores[movie_id]['content_score'] = content_score
                 movie_scores[movie_id]['source'] = 'hybrid'
             else:
                 movie_scores[movie_id] = {
                     'movie': rec,
                     'score': content_score,
+                    'collab_score': 0,
+                    'content_score': content_score,
                     'source': 'content'
                 }
         
@@ -234,6 +242,16 @@ class MovieRecommender:
             key=lambda x: x['score'],
             reverse=True
         )[:limit]
+
+        print(f"\n{'='*80}")
+        print(f"Hybrid Recommendation Scores for User {user_id}")
+        print(f"{'='*80}")
+        print(f"{'Movie':<40} {'Collab':<10} {'Content':<10} {'Total':<10} {'Source':<12}")
+        print(f"{'-'*80}")
+        for item in sorted_recs:
+            movie_title = item['movie']['title'][:37] + '...' if len(item['movie']['title']) > 40 else item['movie']['title']
+            print(f"{movie_title:<40} {item['collab_score']:<10.1f} {item['content_score']:<10.1f} {item['score']:<10.1f} {item['source']:<12}")
+        print(f"{'='*80}\n")
         
         # format the results
         results = []
