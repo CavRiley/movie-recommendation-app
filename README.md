@@ -10,7 +10,7 @@ Repository fulfilling the requirements for the Modern DB Project
 
 ## Versioning
 Python v3.13.15
-packages are in requirements.txt
+Packages are in requirements.txt
 
 ## Setup
 
